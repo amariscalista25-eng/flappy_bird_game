@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const FlappyBirdApp());
@@ -25,27 +26,64 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-enum GameState { notStarted, playing, gameOver }
+enum GameState { notStarted, playing, paused, gameOver }
 
-class _GameScreenState extends State<GameScreen> {
+class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   // Game state
   GameState gameState = GameState.notStarted;
   int score = 0;
   int highScore = 0;
 
-  // Balanced Physics - Easy & Forgiving Mode
+  // Balanced Physics (The mode you hit 16 on)
   double birdY = 0; // -1 at top, 1 at ground
   double velocity = 0;
-  final double gravity = 0.0008; // Floaty, slow fall
-  final double jumpStrength = -0.018; // Soft, controlled bump upward
+  final double gravity = 0.0008; 
+  final double jumpStrength = -0.018; 
 
   // Pipes setup
   List<double> pipeX = [1.3, 2.2];
   List<double> pipeGapY = [0.0, -0.1];
   final double pipeWidth = 0.24; 
-  final double pipeGapHeight = 0.52; // Wider gap for clean passing
+  final double pipeGapHeight = 0.52; 
 
   Timer? gameTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadHighScore();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    gameTimer?.cancel();
+    super.dispose();
+  }
+
+  // Auto-pause when phone calls, home button, or app switching happens
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.hidden) &&
+        gameState == GameState.playing) {
+      pauseGame();
+    }
+  }
+
+  // Load High Score from phone storage
+  Future<void> _loadHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      highScore = prefs.getInt('flappy_high_score') ?? 0;
+    });
+  }
+
+  // Save High Score to phone storage
+  Future<void> _saveHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('flappy_high_score', highScore);
+  }
 
   void startGame() {
     setState(() {
@@ -55,15 +93,37 @@ class _GameScreenState extends State<GameScreen> {
       score = 0;
       pipeX = [1.3, 2.2];
       pipeGapY = [
-        (Random().nextDouble() - 0.5) * 0.5, // Less extreme vertical positions
+        (Random().nextDouble() - 0.5) * 0.5,
         (Random().nextDouble() - 0.5) * 0.5,
       ];
     });
 
+    _runGameLoop();
+  }
+
+  void _runGameLoop() {
     gameTimer?.cancel();
     gameTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
       _updateGame();
     });
+  }
+
+  void pauseGame() {
+    if (gameState == GameState.playing) {
+      gameTimer?.cancel();
+      setState(() {
+        gameState = GameState.paused;
+      });
+    }
+  }
+
+  void resumeGame() {
+    if (gameState == GameState.paused) {
+      setState(() {
+        gameState = GameState.playing;
+      });
+      _runGameLoop();
+    }
   }
 
   void jump() {
@@ -84,11 +144,14 @@ class _GameScreenState extends State<GameScreen> {
       birdY += velocity;
 
       for (int i = 0; i < pipeX.length; i++) {
-        pipeX[i] -= 0.008; // Relaxed scrolling speed
+        pipeX[i] -= 0.008;
 
         if ((pipeX[i] + 0.008 >= 0) && (pipeX[i] < 0)) {
           score++;
-          if (score > highScore) highScore = score;
+          if (score > highScore) {
+            highScore = score;
+            _saveHighScore();
+          }
         }
 
         if (pipeX[i] < -1.4) {
@@ -102,13 +165,11 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _checkCollisions() {
-    // Ground or ceiling crash
     if (birdY > 0.82 || birdY < -1.1) {
       _triggerGameOver();
       return;
     }
 
-    // Pipe collision checks
     for (int i = 0; i < pipeX.length; i++) {
       if (pipeX[i] - (pipeWidth / 2) < 0.08 && pipeX[i] + (pipeWidth / 2) > -0.08) {
         double topPipeBottom = pipeGapY[i] - (pipeGapHeight / 2);
@@ -130,15 +191,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   @override
-  void dispose() {
-    gameTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: jump,
+      behavior: HitTestBehavior.opaque,
       child: Scaffold(
         body: Column(
           children: [
@@ -146,6 +202,7 @@ class _GameScreenState extends State<GameScreen> {
               flex: 5,
               child: Stack(
                 children: [
+                  // Sky Background
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -156,6 +213,7 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
 
+                  // Pipes
                   for (int i = 0; i < pipeX.length; i++) ...[
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 0),
@@ -191,6 +249,7 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ],
 
+                  // Bird
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 0),
                     alignment: Alignment(0, birdY),
@@ -249,6 +308,7 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
 
+                  // Score Display
                   Positioned(
                     top: 50,
                     left: 0,
@@ -268,26 +328,94 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
 
-                  if (gameState == GameState.notStarted)
-                    const Center(
-                      child: Text(
-                        'TAP TO JUMP & START',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                          shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                  // Pause Button (visible during active gameplay)
+                  if (gameState == GameState.playing)
+                    Positioned(
+                      top: 45,
+                      right: 20,
+                      child: GestureDetector(
+                        onTap: pauseGame,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black38,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: const Icon(Icons.pause, color: Colors.white, size: 28),
                         ),
                       ),
                     ),
 
+                  // Start Screen Overlay
+                  if (gameState == GameState.notStarted)
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'TAP TO JUMP & START',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                              shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'HIGH SCORE: $highScore',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.yellowAccent,
+                              shadows: [Shadow(blurRadius: 3, color: Colors.black)],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Pause Screen Overlay
+                  if (gameState == GameState.paused)
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'GAME PAUSED',
+                              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black80),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0288D1),
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              ),
+                              onPressed: resumeGame,
+                              icon: const Icon(Icons.play_arrow, color: Colors.white),
+                              label: const Text('RESUME', style: TextStyle(fontSize: 18, color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Game Over Screen Overlay
                   if (gameState == GameState.gameOver)
                     Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withOpacity(0.95),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: Colors.black, width: 2),
                         ),
@@ -318,6 +446,7 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
+            // Grass / Ground Section
             Expanded(
               flex: 1,
               child: Container(
@@ -331,7 +460,7 @@ class _GameScreenState extends State<GameScreen> {
                     const Expanded(
                       child: Center(
                         child: Text(
-                          'FLAPPY BIRD FLUTTER',
+                          'FLAPPY BIRD MASKY',
                           style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 2),
                         ),
                       ),
