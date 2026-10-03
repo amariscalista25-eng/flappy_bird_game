@@ -26,13 +26,16 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-enum GameState { notStarted, playing, paused, gameOver }
+enum GameState { notStarted, playing, paused, gameOver, countdown }
 
 class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   // Game state
   GameState gameState = GameState.notStarted;
   int score = 0;
   int highScore = 0;
+  int countdownNumber = 3;
+  Timer? countdownTimer;
+  
 
   // Balanced Physics (The mode you hit 16 on)
   double birdY = 0; // -1 at top, 1 at ground
@@ -55,12 +58,14 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     _loadHighScore();
   }
 
-  @override
+    @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     gameTimer?.cancel();
+    countdownTimer?.cancel();
     super.dispose();
   }
+
 
   // Auto-pause when phone calls, home button, or app switching happens
   @override
@@ -85,20 +90,41 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     await prefs.setInt('flappy_high_score', highScore);
   }
 
-  void startGame() {
+    void _startCountdown({bool isReset = false}) {
+    countdownTimer?.cancel();
+    gameTimer?.cancel();
     setState(() {
-      gameState = GameState.playing;
-      birdY = 0;
-      velocity = jumpStrength;
-      score = 0;
-      pipeX = [1.3, 2.2];
-      pipeGapY = [
-        (Random().nextDouble() - 0.5) * 0.5,
-        (Random().nextDouble() - 0.5) * 0.5,
-      ];
+      gameState = GameState.countdown;
+      countdownNumber = 3;
+      if (isReset) {
+        birdY = 0;
+        velocity = 0;
+        score = 0;
+        pipeX = [1.3, 2.2];
+        pipeGapY = [
+          (Random().nextDouble() - 0.5) * 0.5,
+          (Random().nextDouble() - 0.5) * 0.5,
+        ];
+      } else {
+        velocity = 0; // Freeze velocity so bird doesn't plummet on resume
+      }
     });
 
-    _runGameLoop();
+    countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (countdownNumber > 1) {
+          countdownNumber--;
+        } else {
+          timer.cancel();
+          gameState = GameState.playing;
+          _runGameLoop();
+        }
+      });
+    });
+  }
+
+  void startGame() {
+    _startCountdown(isReset: true);
   }
 
   void _runGameLoop() {
@@ -119,12 +145,10 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 
   void resumeGame() {
     if (gameState == GameState.paused) {
-      setState(() {
-        gameState = GameState.playing;
-      });
-      _runGameLoop();
+      _startCountdown(isReset: false);
     }
   }
+
 
   void jump() {
     if (gameState == GameState.notStarted) {
@@ -408,6 +432,22 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
+                                    // Countdown Overlay
+                  if (gameState == GameState.countdown)
+                    Center(
+                      child: Text(
+                        '$countdownNumber',
+                        style: const TextStyle(
+                          fontSize: 90,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(offset: Offset(4, 4), color: Colors.black54, blurRadius: 4),
+                          ],
+                        ),
+                      ),
+                    ),
+                  
 
                   // Game Over Screen Overlay
                   if (gameState == GameState.gameOver)
