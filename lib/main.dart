@@ -33,17 +33,17 @@ class _GameScreenState extends State<GameScreen> {
   int score = 0;
   int highScore = 0;
 
-  // Bird physics
+  // Bird physics - Adjusted for gentle fall & subtle tap jump
   double birdY = 0; // -1 at top, 1 at ground
   double velocity = 0;
-  final double gravity = 0.0028;
-  final double jumpStrength = -0.038;
+  final double gravity = 0.0012; // Much slower fall (was 0.0028)
+  final double jumpStrength = -0.022; // Small, controlled lift per tap (was -0.038)
 
-  // Pipes (x position from 1.5 to -1.5, gapY center from -0.4 to 0.4)
+  // Pipes
   List<double> pipeX = [1.2, 2.0];
   List<double> pipeGapY = [0.0, -0.2];
   final double pipeWidth = 0.25; 
-  final double pipeGapHeight = 0.42; 
+  final double pipeGapHeight = 0.45; // Slightly wider gap for balanced difficulty
 
   Timer? gameTimer;
 
@@ -55,8 +55,8 @@ class _GameScreenState extends State<GameScreen> {
       score = 0;
       pipeX = [1.2, 2.0];
       pipeGapY = [
-        (Random().nextDouble() - 0.5) * 0.8,
-        (Random().nextDouble() - 0.5) * 0.8,
+        (Random().nextDouble() - 0.5) * 0.7,
+        (Random().nextDouble() - 0.5) * 0.7,
       ];
     });
 
@@ -80,47 +80,38 @@ class _GameScreenState extends State<GameScreen> {
 
   void _updateGame() {
     setState(() {
-      // Apply gravity to bird
       velocity += gravity;
       birdY += velocity;
 
-      // Move pipes
       for (int i = 0; i < pipeX.length; i++) {
-        pipeX[i] -= 0.012; // Speed of scrolling
+        pipeX[i] -= 0.010; // Slightly smoother scrolling speed
 
-        // Check if passed a pipe for point
-        if ((pipeX[i] + 0.012 >= 0) && (pipeX[i] < 0)) {
+        if ((pipeX[i] + 0.010 >= 0) && (pipeX[i] < 0)) {
           score++;
           if (score > highScore) highScore = score;
         }
 
-        // Reset pipe to right side once off-screen left
         if (pipeX[i] < -1.3) {
           pipeX[i] = 1.1;
-          pipeGapY[i] = (Random().nextDouble() - 0.5) * 0.8;
+          pipeGapY[i] = (Random().nextDouble() - 0.5) * 0.7;
         }
       }
 
-      // Check Collisions
       _checkCollisions();
     });
   }
 
   void _checkCollisions() {
-    // Ground collision (0.85 screen height)
     if (birdY > 0.82 || birdY < -1.1) {
       _triggerGameOver();
       return;
     }
 
-    // Pipe collision checks
     for (int i = 0; i < pipeX.length; i++) {
-      // Check if bird is within pipe's X bounds
       if (pipeX[i] - (pipeWidth / 2) < 0.1 && pipeX[i] + (pipeWidth / 2) > -0.1) {
         double topPipeBottom = pipeGapY[i] - (pipeGapHeight / 2);
         double bottomPipeTop = pipeGapY[i] + (pipeGapHeight / 2);
 
-        // Hit top pipe or bottom pipe
         if (birdY < topPipeBottom || birdY > bottomPipeTop) {
           _triggerGameOver();
           return;
@@ -149,12 +140,10 @@ class _GameScreenState extends State<GameScreen> {
       child: Scaffold(
         body: Column(
           children: [
-            // Sky & Gameplay Area (80% of screen height)
             Expanded(
               flex: 5,
               child: Stack(
                 children: [
-                  // Sky Background
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -165,9 +154,7 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
 
-                  // Pipes
                   for (int i = 0; i < pipeX.length; i++) ...[
-                    // Top Pipe
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 0),
                       alignment: Alignment(pipeX[i], -1.1),
@@ -184,7 +171,6 @@ class _GameScreenState extends State<GameScreen> {
                         ),
                       ),
                     ),
-                    // Bottom Pipe
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 0),
                       alignment: Alignment(pipeX[i], 1.1),
@@ -203,12 +189,11 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ],
 
-                  // Bird
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 0),
                     alignment: Alignment(0, birdY),
                     child: Transform.rotate(
-                      angle: velocity * 8.0, // Rotates down when falling
+                      angle: velocity * 12.0,
                       child: Container(
                         width: 36,
                         height: 36,
@@ -222,7 +207,6 @@ class _GameScreenState extends State<GameScreen> {
                         ),
                         child: Stack(
                           children: [
-                            // Bird Eye
                             Positioned(
                               right: 6,
                               top: 6,
@@ -245,7 +229,6 @@ class _GameScreenState extends State<GameScreen> {
                                 ),
                               ),
                             ),
-                            // Beak
                             Positioned(
                               right: 0,
                               bottom: 10,
@@ -264,7 +247,6 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
 
-                  // Score Counter Overlay
                   Positioned(
                     top: 50,
                     left: 0,
@@ -284,7 +266,6 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
 
-                  // Start Screen Prompt
                   if (gameState == GameState.notStarted)
                     const Center(
                       child: Text(
@@ -299,7 +280,6 @@ class _GameScreenState extends State<GameScreen> {
                       ),
                     ),
 
-                  // Game Over Screen
                   if (gameState == GameState.gameOver)
                     Center(
                       child: Container(
@@ -336,21 +316,20 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            // Grass / Ground Section (20% of screen height)
             Expanded(
               flex: 1,
               child: Container(
-                color: const Color(0xFF8D6E63), // Dirt Color
+                color: const Color(0xFF8D6E63),
                 child: Column(
                   children: [
                     Container(
                       height: 16,
-                      color: const Color(0xFF388E3C), // Top Grass
+                      color: const Color(0xFF388E3C),
                     ),
                     const Expanded(
                       child: Center(
                         child: Text(
-                          'FLAPPY BIRD FLUTTER',
+                          'FLAPPY BIRD MASKY',
                           style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 2),
                         ),
                       ),
