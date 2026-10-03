@@ -33,17 +33,17 @@ class _GameScreenState extends State<GameScreen> {
   int score = 0;
   int highScore = 0;
 
-  // Bird physics - Adjusted for gentle fall & subtle tap jump
+  // Balanced Physics - Easy & Forgiving Mode
   double birdY = 0; // -1 at top, 1 at ground
   double velocity = 0;
-  final double gravity = 0.0012; // Much slower fall (was 0.0028)
-  final double jumpStrength = -0.022; // Small, controlled lift per tap (was -0.038)
+  final double gravity = 0.0008; // Floaty, slow fall
+  final double jumpStrength = -0.018; // Soft, controlled bump upward
 
-  // Pipes
-  List<double> pipeX = [1.2, 2.0];
-  List<double> pipeGapY = [0.0, -0.2];
-  final double pipeWidth = 0.25; 
-  final double pipeGapHeight = 0.45; // Slightly wider gap for balanced difficulty
+  // Pipes setup
+  List<double> pipeX = [1.3, 2.2];
+  List<double> pipeGapY = [0.0, -0.1];
+  final double pipeWidth = 0.24; 
+  final double pipeGapHeight = 0.52; // Wider gap for clean passing
 
   Timer? gameTimer;
 
@@ -53,10 +53,10 @@ class _GameScreenState extends State<GameScreen> {
       birdY = 0;
       velocity = jumpStrength;
       score = 0;
-      pipeX = [1.2, 2.0];
+      pipeX = [1.3, 2.2];
       pipeGapY = [
-        (Random().nextDouble() - 0.5) * 0.7,
-        (Random().nextDouble() - 0.5) * 0.7,
+        (Random().nextDouble() - 0.5) * 0.5, // Less extreme vertical positions
+        (Random().nextDouble() - 0.5) * 0.5,
       ];
     });
 
@@ -84,16 +84,16 @@ class _GameScreenState extends State<GameScreen> {
       birdY += velocity;
 
       for (int i = 0; i < pipeX.length; i++) {
-        pipeX[i] -= 0.010; // Slightly smoother scrolling speed
+        pipeX[i] -= 0.008; // Relaxed scrolling speed
 
-        if ((pipeX[i] + 0.010 >= 0) && (pipeX[i] < 0)) {
+        if ((pipeX[i] + 0.008 >= 0) && (pipeX[i] < 0)) {
           score++;
           if (score > highScore) highScore = score;
         }
 
-        if (pipeX[i] < -1.3) {
-          pipeX[i] = 1.1;
-          pipeGapY[i] = (Random().nextDouble() - 0.5) * 0.7;
+        if (pipeX[i] < -1.4) {
+          pipeX[i] = 1.2;
+          pipeGapY[i] = (Random().nextDouble() - 0.5) * 0.5;
         }
       }
 
@@ -102,13 +102,15 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _checkCollisions() {
+    // Ground or ceiling crash
     if (birdY > 0.82 || birdY < -1.1) {
       _triggerGameOver();
       return;
     }
 
+    // Pipe collision checks
     for (int i = 0; i < pipeX.length; i++) {
-      if (pipeX[i] - (pipeWidth / 2) < 0.1 && pipeX[i] + (pipeWidth / 2) > -0.1) {
+      if (pipeX[i] - (pipeWidth / 2) < 0.08 && pipeX[i] + (pipeWidth / 2) > -0.08) {
         double topPipeBottom = pipeGapY[i] - (pipeGapHeight / 2);
         double bottomPipeTop = pipeGapY[i] + (pipeGapHeight / 2);
 
@@ -193,7 +195,7 @@ class _GameScreenState extends State<GameScreen> {
                     duration: const Duration(milliseconds: 0),
                     alignment: Alignment(0, birdY),
                     child: Transform.rotate(
-                      angle: velocity * 12.0,
+                      angle: velocity * 14.0,
                       child: Container(
                         width: 36,
                         height: 36,
@@ -329,7 +331,7 @@ class _GameScreenState extends State<GameScreen> {
                     const Expanded(
                       child: Center(
                         child: Text(
-                          'FLAPPY BIRD MASKY',
+                          'FLAPPY BIRD FLUTTER',
                           style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 2),
                         ),
                       ),
