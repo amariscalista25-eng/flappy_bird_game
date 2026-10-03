@@ -392,7 +392,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                           children: [
                             const Text(
                               'GAME PAUSED',
-                              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black80),
+                              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87),
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton.icon(
