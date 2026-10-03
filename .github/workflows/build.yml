@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Flutter APK
 
 on:
   push:
@@ -7,11 +7,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -19,16 +21,29 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.16.5'
           channel: 'stable'
 
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Create Clean Flutter Project Scaffold & Patch SDK
+        run: |
+          flutter create temp_app --org com.scrap.tracker --project-name flappy_bird_game
+          cp -r lib/* temp_app/lib/
+          cp pubspec.yaml temp_app/pubspec.yaml
+          
+          # Patch build.gradle to satisfy SDK 34 requirements for shared_preferences
+          BUILD_FILE="temp_app/android/app/build.gradle"
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' $BUILD_FILE
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' $BUILD_FILE
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' $BUILD_FILE
+          
+          cd temp_app
+          flutter pub get
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk ../app-release.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: app-release
+          path: app-release.apk
+          
